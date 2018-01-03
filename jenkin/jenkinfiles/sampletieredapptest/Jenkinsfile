@@ -1,0 +1,295 @@
+pipeline {
+    options
+    {
+        buildDiscarder(logRotator(numToKeepStr: '3'))
+    }
+    agent any
+    environment { 
+        mvnHome = tool 'maven3'
+        DB_HOST = "${DB_HOST}"
+        DB_USER = "root"
+        DB_PASSWORD = "password"
+        IMAGE_NAME  = 'crossoverservice'
+        // REGISTRY =  '657907747545.dkr.ecr.us-east-1.amazonaws.com'
+        REGISTRY =  'papu'
+        VERSION = 'latest'
+    }
+    stages {
+        stage('WSClean') {
+            steps { 
+                step([$class:'WsCleanup'])
+            }
+        } 
+        stage('Checkout') {
+            steps { 
+                script {
+                    try {
+                        git branch: 'papu', credentialsId: '0957eb3e-b490-4d0a-b06e-c993ec94a732', url: 'https://bitbucket.org/synectiks/cloudautomationexamples.git'
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    }
+                }
+            }
+        }         
+        stage('HashCalc') {
+            steps
+            {
+                script 
+                {
+                    try {
+                            // calculate GIT lastest commit short-hash
+                            gitCommitHash = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+                            shortCommitHash = gitCommitHash.take(7)
+                            // calculate a sample version tag
+                            VERSION = shortCommitHash
+                            // set the build display name
+                            currentBuild.displayName = "#${BUILD_ID}-${VERSION}"
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        throw e
+                    }
+                }
+            }
+        }
+        stage('build') {
+            steps { 
+                script {
+                    try {
+                        dir('jenkin/services/crossover') {
+                            sh "make binary"
+                        }
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        throw e
+                    }
+                }
+            }
+        } 
+        stage('PreQualityChecks') {
+            parallel {
+                stage('UnitTests') {
+                    steps {
+                        script {
+                            try {
+                                dir('jenkin/services/crossover') {
+                                    //sh "make test"
+                                    sh "'${mvnHome}/bin/mvn' surefire-report:report"
+                                    // archive "target/**/*"
+                                    junit 'target/surefire-reports/*.xml'
+                                    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'target/site', reportFiles: 'surefire-report.html', reportName: 'Unit Reports'])
+                                }
+                            } catch (Exception e) {
+                                currentBuild.result = "FAILURE"
+                                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                                throw e
+                            }
+                        }
+                    }
+                }
+                stage('CodeQualityTest') {
+                    steps {
+                        script {
+                            try {
+                                dir('jenkin/services/crossover') {
+                                    withSonarQubeEnv('mysonar') {
+                                        // requires SonarQube Scanner for Maven 3.2+
+                                        sh "'${mvnHome}/bin/mvn' org.sonarsource.scanner.maven:sonar-maven-plugin:3.2:sonar"
+                                    }
+                                }
+                            } catch (Exception e) {
+                                currentBuild.result = "FAILURE"
+                                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                                throw e
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        stage("SonarQube Quality Gate") { 
+            steps {
+                script {
+                    echo "passed"
+                    // try {
+                    //     withSonarQubeEnv('mysonar') {
+                    //         timeout(time: 1, unit: 'HOURS') { 
+                    //             def qg = waitForQualityGate() 
+                    //             if (qg.status != 'OK') {
+                    //             error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                    //             }
+                    //         }
+                    //     }
+                    // } catch (Exception e) {
+                    //     currentBuild.result = "FAILURE"
+                    //     step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    //     throw e
+                    // }
+                }
+            }
+        }
+        stage('CreateImage') {
+            steps { 
+                script {
+                    try {
+                        dir('jenkin/services/crossover') {
+                            sh "make image"
+                         }
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        throw e
+                    }
+                }
+            }
+        } 
+        stage('LocalTest') {
+            steps { 
+                script {
+                    try {
+                        dir('jenkin/services/crossover') {
+                            echo "To Do implement this"
+                        }
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        throw e
+                    }
+                }
+            }
+        }
+        stage('PublishImage') {
+            steps {
+                script { 
+                        try {
+                                // withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-dev']]) {
+                                    dir('jenkin/services/crossover') {
+                                        //sh("eval \$(aws ecr get-login --no-include-email --region us-east-1 | sed 's|https://||')")
+                                        sh 'docker login -u papu -p jaya8668'
+                                        sh "make publish"
+                                 }
+                            // }                           
+                        } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        throw e
+                    }
+                }
+            }
+        }
+        stage('DevDeploy') {
+            steps { 
+                echo "Deploying Service in Dev Bucket"                 
+                script {
+                    if(isDev == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-dev']]) {                                    
+                                    sh "sceptre --dir crossover/ launch-stack dev mainservice"
+                                }
+                            }
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }
+            }
+        } 
+        stage('TestDeploy') {
+            steps { 
+                echo "Deploying Service in Test Bucket"                
+                script {
+                    if(isTest == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-test']]) {                                    
+                                    sh "sceptre --dir crossover/ launch-stack test mainservice"
+                                }
+                            }                           
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }               
+            }
+        }         
+        stage('ATP') {
+            steps { 
+                script {
+                    try {
+                        echo "Doing ATP" 
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    }
+                }
+            }
+        } 
+        stage('StageDeploy') {
+            steps {                 
+                script {
+                    echo "Deploying in Stage" 
+                    if(isStage == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-stage']]) {                                    
+                                    sh "sceptre --dir crossover/ launch-stack stage mainservice"
+                                }
+                            }                           
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }
+            }
+        } 
+        stage('ApproveForProd') {
+            steps { 
+                script {
+                    try {
+                        echo "Prod Approval" 
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    }
+                }
+            }
+        } 
+        stage('ProdDeploy') {
+            steps { 
+                echo "Deploying Service in Prod Bucket" 
+                script {
+                    if(isProd == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-prod']]) {                                    
+                                    sh "sceptre --dir crossover/ launch-stack prod mainservice"
+                                }
+                            }                             
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }                
+            }
+        }                    
+    } 
+    post
+    {
+        always
+        {
+            // make sure that the Docker image is removed
+            // dir('jenkin/services/crossover') {
+            //     archive "target/**/*"
+            //     junit 'target/surefire-reports/*.xml'
+            // }
+            sh "docker rmi $IMAGE_NAME | true"           
+        }
+    }
+}

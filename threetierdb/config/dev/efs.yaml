@@ -1,0 +1,7 @@
+template_path: templates/efs.json
+
+parameters:
+  EnvironmentName: !stack_output backbone::EnvironmentName
+  VPC:  !stack_output backbone::VPC
+  PrivateSubnet1: !stack_output backbone::PrivateSubnet1
+  PrivateSubnet2: !stack_output backbone::PrivateSubnet2

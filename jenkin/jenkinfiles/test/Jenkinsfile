@@ -1,0 +1,71 @@
+pipeline {
+    agent any
+    stages {
+                stage('InitEnv') {
+                        env.mvnHome = tool 'maven3'
+                        env.DB_HOST = "10.10.10.50"
+                        env.DB_USER = "root"
+                        env.DB_PASSWORD = "password"
+                }   
+            // stage('Checkout') { //(1)
+            //     step([$class:'WsCleanup'])
+            //     git branch: 'papu', credentialsId: '0957eb3e-b490-4d0a-b06e-c993ec94a732', url: 'https://bitbucket.org/synectiks/cloudautomationexamples.git'
+            // }
+            // stage('build') { //(3)
+            //     dir('jenkin/services/crossover') {
+            //         sh "make binary"
+            //     }          
+            // }
+            // stage('UnitTests') { //(3)
+            //     dir('jenkin/services/crossover') {
+            //         sh "'${mvnHome}/bin/mvn' test"
+            //     }          
+            // }
+            // // stage('CreateDockerImage') { //(3)
+            // //     dir('jenkin/services/crossover') {
+            // //         sh "make image"
+            // //     }          
+            // // }
+            // stage('RunDockerLocalyAndTests') { //(3)
+            //     dir('jenkin/services/crossover') {
+            //         echo "To Do implement this"
+            //     }          
+            // }
+            stage('PublishDocker') { //(3)
+                 dir('jenkin/services/crossover'){
+                    steps {
+                        echo 'Hello World'
+                        dockerBuildAndPublish {
+                            repositoryName('example/crossover')
+                            tag('${BUILD_TIMESTAMP}-${GIT_REVISION,length=7}')
+                            registryCredentials('docker-hub')
+                            forcePull(false)
+                            createFingerprints(false)
+                            skipDecorate()
+                        }
+                    }
+                }
+            }
+            stage('PublishImage') { //(1)
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'a25ca8ba-e740-4155-82f7-68e953f73bf2']]) {
+                    dir('jenkin/services/crossover') {
+                        sh "eval `aws ecr get-login --no-include-email --region us-east-1`"
+                        sh "make publish"
+                    }
+                }
+            }
+            stage('Report Gathering') {
+                dir('jenkin/services/crossover') {
+                    publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'target/site/serenity', reportFiles: 'index.html', reportName: 'Serenity Reports'])
+                }
+            }
+            stage('Report') { //(4)
+                if (currentBuild.currentResult == 'UNSTABLE') {
+                    currentBuild.result = "UNSTABLE"
+                } else {
+                    currentBuild.result = "SUCCESS"
+                }
+                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+            }
+         } 
+}

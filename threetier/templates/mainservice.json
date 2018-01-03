@@ -1,0 +1,238 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This template deploys service to an ECS cluster ",
+  "Parameters": {
+    "ProductName": {
+      "Description":
+        "The Product Name, that we tag with every resource , so that we can track resources for products",
+      "Type": "String"
+    },
+    "EnvironmentName": {
+      "Description":
+        "An environment name that will be prefixed to resource names",
+      "Type": "String"
+    },
+    "VPC": {
+      "Description": "Choose which VPC this ECS cluster should be deployed to",
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "Cluster": {
+      "Description": "Choose which VPC this ECS cluster should be deployed to",
+      "Type": "String"
+    },
+    "DesiredCount": {
+      "Description":
+        "How many instances of this task should we run across our cluster?",
+      "Type": "Number",
+      "Default": 1
+    },
+    "Listener": {
+      "Description": "The Application Load Balancer listener to register with",
+      "Type": "String"
+    },
+    "Path": {
+      "Description": "The Application Load Balancer listener to register with",
+      "Type": "String",
+      "Default": "/"
+    },
+    "LoadbalancerUrl": {
+      "Description": "The Application Load Balancer listener to register with",
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "Service": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": "ListenerRule",
+      "Properties": {
+        "Cluster": {
+          "Ref": "Cluster"
+        },
+        "DesiredCount": {
+          "Ref": "DesiredCount"
+        },
+        "LoadBalancers": [
+          {
+            "ContainerName": "website-service",
+            "ContainerPort": 8000,
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
+          }
+        ],
+        "Role": {
+          "Ref": "ServiceRole"
+        },
+        "ServiceName": "website-service",
+        "TaskDefinition": {
+          "Ref": "TaskDefinition"
+        }
+      }
+    },
+    "TaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "website-service",
+        "ContainerDefinitions": [
+          {
+            "Name": "website-service",
+            "Image":
+              "657907747545.dkr.ecr.us-east-1.amazonaws.com/examples/website-service:latest",
+            "PortMappings": [
+              {
+                "ContainerPort": 8000
+              }
+            ],
+            "Memory": "500",
+            "Essential": "true",
+            "Environment": [
+              {
+                "Name": "PRODUCT_SERVICE_URL",
+                "Value": {
+                  "Fn::Sub": "${LoadbalancerUrl}/products"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "AWS::StackName"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ListenerRule": {
+      "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+      "Properties": {
+        "Actions": [
+          {
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            },
+            "Type": "forward"
+          }
+        ],
+        "Conditions": [
+          {
+            "Field": "path-pattern",
+            "Values": [
+              {
+                "Ref": "Path"
+              }
+            ]
+          }
+        ],
+        "ListenerArn": {
+          "Ref": "Listener"
+        },
+        "Priority": 1
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "HealthCheckIntervalSeconds": 10,
+        "HealthCheckPath": "/",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "Matcher": {
+          "HttpCode": "200-299"
+        },
+        "Name": {
+          "Fn::Sub": "${ProductName}-${EnvironmentName}-Main-TG"
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ProductName}.${EnvironmentName}-Main-TG"
+            }
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "ServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ecs-service-${AWS::StackName}"
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess",
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerServiceFullAccess",
+          "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "product-service-policies",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:AuthorizeSecurityGroupIngress",
+                    "ec2:Describe",
+                    "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                    "elasticloadbalancing:Describe",
+                    "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                    "elasticloadbalancing:DeregisterTargets",
+                    "elasticloadbalancing:DescribeTargetGroups",
+                    "elasticloadbalancing:DescribeTargetHealth",
+                    "elasticloadbalancing:RegisterTargets"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ],
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+      },
+      "Metadata": {}
+    },
+    "CloudWatchLogsGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "AWS::StackName"
+        },
+        "RetentionInDays": 365
+      }
+    }
+  },
+  "Outputs": {
+    "MainService": {
+      "Description": "A reference to the Service",
+      "Value": {
+        "Ref": "Service"
+      }
+    }
+  }
+}

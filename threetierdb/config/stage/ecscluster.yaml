@@ -1,0 +1,13 @@
+template_path: templates/ecscluster.json
+parameters:
+  ProductName: !stack_output backbone::ProductName
+  EnvironmentName: !stack_output backbone::EnvironmentName
+  VPC:  !stack_output backbone::VPC
+  PrivateSubnets: !stack_output backbone::PrivateSubnets
+  FileSystem: !stack_output efs::FileSystem
+  SshSecurityGroup: !stack_output securitygroups::SshSecurityGroup
+  EcsHostSecurityGroup: !stack_output securitygroups::EcsHostSecurityGroup
+  EfsSecurityGroup:  !stack_output efs::EfsAccessSecurityGroup
+  AddEfs: "true"
+  InstanceType: "m3.medium"
+  DesiredClusterSize: '1'

@@ -1,0 +1,1 @@
+This service is just used to show how the tests results are published to influxdb

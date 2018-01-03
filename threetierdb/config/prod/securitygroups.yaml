@@ -1,0 +1,6 @@
+template_path: templates/securitygroups.json
+parameters:
+  ProductName: !stack_output backbone::ProductName
+  EnvironmentName: !stack_output backbone::EnvironmentName
+  VPC:  !stack_output backbone::VPC
+  WhitelistIP: 0.0.0.0/0

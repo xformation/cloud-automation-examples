@@ -1,0 +1,215 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description":
+    "[Child]This template is used to setup the EFS for Jenkins slaves to share build artifacts in the pipeline",
+  "Parameters": {
+    "ProductName": {
+      "Description":
+        "The Product Name, that we tag with every resource , so that we can track resources for products",
+      "Type": "String"
+    },
+    "EnvironmentName": {
+      "Type": "String"
+    },
+    "VPC": {
+      "Description": "Choose which VPC this ECS cluster should be deployed to",
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "WhitelistIP": {
+      "Description": "CIDR IP range to allow to access the Jumpbox.",
+      "Type": "String",
+      "AllowedPattern":
+        "^([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])/([0-9]|1[0-9]|2[0-9]|3[0-2])$",
+      "ConstraintDescription":
+        "Must be a valid CIDR range in the form x.x.x.x/x"
+    }
+  },
+  "Resources": {
+    "ClusterSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription":
+          "Allows members of the Jenkins cluster to communicate",
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      },
+      "Metadata": {}
+    },
+    "SecurityGroupIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ClusterSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "0",
+        "ToPort": "65535",
+        "SourceSecurityGroupId": {
+          "Ref": "ClusterSecurityGroup"
+        }
+      }
+    },
+    "JumpboxSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Allows SSH access to Jumpbox from the internet.",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": {
+              "Ref": "WhitelistIP"
+            },
+            "FromPort": 22,
+            "ToPort": 22,
+            "IpProtocol": "tcp"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "EnvironmentName"
+                  },
+                  "jumpbox-access"
+                ]
+              ]
+            }
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "SshAccessSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription":
+          "Allows Jumpbox access to the instances this group is assigned to.",
+        "SecurityGroupIngress": [
+          {
+            "SourceSecurityGroupId": {
+              "Ref": "JumpboxSecurityGroup"
+            },
+            "FromPort": 22,
+            "ToPort": 22,
+            "IpProtocol": "tcp"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  {
+                    "Ref": "EnvironmentName"
+                  },
+                  "ssh-access"
+                ]
+              ]
+            }
+          }
+        ],
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "LoadBalancerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "GroupDescription":
+          "Access to the load balancer that sits in front of ECS",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "IpProtocol": -1
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub":
+                "${ProductName}.${EnvironmentName}.LoadBalancers-SecurityGroup"
+            }
+          }
+        ]
+      }
+    },
+    "EcsHostSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "GroupDescription":
+          "Access to the load balancer that sits in front of ECS",
+        "SecurityGroupIngress": [
+          {
+            "SourceSecurityGroupId": {
+              "Ref": "LoadBalancerSecurityGroup"
+            },
+            "IpProtocol": -1
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub":
+                "${ProductName}.${EnvironmentName}.ECSHOST-SecurityGroup"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ClusterSecurityGroup": {
+      "Description": "The ID of the JenkinsClusterSecurityGroup",
+      "Value": {
+        "Ref": "ClusterSecurityGroup"
+      }
+    },
+    "SecurityGroupIngress": {
+      "Description": "The ID of the JenkinsClusterSecurityGroup",
+      "Value": {
+        "Ref": "SecurityGroupIngress"
+      }
+    },
+    "SshSecurityGroup": {
+      "Description": "SSH Security Group",
+      "Value": {
+        "Ref": "SshAccessSecurityGroup"
+      }
+    },
+    "JumpboxSecurityGroup": {
+      "Description": "The ID of the JenkinsClusterSecurityGroup",
+      "Value": {
+        "Ref": "JumpboxSecurityGroup"
+      }
+    },
+    "LoadBalancerSecurityGroup": {
+      "Description": "The ID of the LoadBalancerSecurityGroup",
+      "Value": {
+        "Ref": "LoadBalancerSecurityGroup"
+      }
+    },
+    "EcsHostSecurityGroup": {
+      "Description": "The ID of the EcsHostSecurityGroup",
+      "Value": {
+        "Ref": "EcsHostSecurityGroup"
+      }
+    }
+  }
+}

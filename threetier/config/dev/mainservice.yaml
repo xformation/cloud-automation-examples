@@ -1,0 +1,8 @@
+template_path: templates/mainservice.json
+parameters:
+  ProductName: !stack_output backbone::ProductName
+  EnvironmentName: !stack_output backbone::EnvironmentName
+  VPC:  !stack_output backbone::VPC
+  Cluster: !stack_output ecs-cluster::Cluster
+  Listener: !stack_output load-balancer::Listener
+  LoadbalancerUrl:  !stack_output load-balancer::LoadBalancerUrl

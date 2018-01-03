@@ -1,0 +1,109 @@
+pipeline {
+    options
+    {
+        buildDiscarder(logRotator(numToKeepStr: '3'))
+    }
+    agent any
+    environment { 
+        VERSION = 'latest'
+    }
+    stages {
+        stage('WSClean') {
+            steps { 
+                step([$class:'WsCleanup'])
+            }
+        } 
+        stage('Checkout') {
+            steps { 
+                script {
+                    try {
+                        git branch: 'papu', credentialsId: '0957eb3e-b490-4d0a-b06e-c993ec94a732', url: 'https://bitbucket.org/synectiks/cloudautomationexamples.git'
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    }
+                }
+            }
+        }         
+        stage('CreateBuckets') {
+            parallel {
+                stage('DevBucket') {
+                    steps {
+                        script {
+                            try {
+                                if(isDev == 'true') {
+                                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-dev']]) {                                    
+                                        sh "sceptre --dir threetierdb launch-env dev"
+                                    }
+                                }
+                            } catch (Exception e) {
+                                currentBuild.result = "FAILURE"
+                                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                                throw e
+                            }
+                        }
+                    }
+                }
+                stage('TestBucket') {
+                    steps {
+                        script {
+                            try {
+                                if (isTest == 'true') {
+                                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-test']]) {                                   
+                                        sh "sceptre --dir threetierdb launch-env test"
+                                    }                                   
+                                }
+                            } catch (Exception e) {
+                                currentBuild.result = "FAILURE"
+                                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                                throw e
+                            }
+                        }
+                    }
+                }
+                stage('StageBucket') {
+                    steps {
+                        script {
+                            try {
+                                if (isStage == 'true') {
+                                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-stage']]) {                                    
+                                        sh "sceptre --dir threetierdb launch-env stage"
+                                    }
+                                }
+                            } catch (Exception e) {
+                                currentBuild.result = "FAILURE"
+                                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                                throw e
+                            }
+                        }
+                    }
+                }
+                stage('ProdBucket') {
+                    steps {
+                        script {
+                            try {
+                                if(isProd == 'true') {
+                                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-prod']]) {
+                                        sh "sceptre --dir threetierdb launch-env prod"
+                                    }
+                                }
+                            } catch (Exception e) {
+                                currentBuild.result = "FAILURE"
+                                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                                throw e
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } 
+    post
+    {
+        always
+        {
+            // make sure 
+            echo "doing some post processing"
+        }
+    }
+}

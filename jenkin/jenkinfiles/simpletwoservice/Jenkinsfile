@@ -1,0 +1,140 @@
+pipeline {
+    options
+    {
+        buildDiscarder(logRotator(numToKeepStr: '3'))
+    }
+    agent any
+    environment { 
+        mvnHome = tool 'maven3'
+    }
+    stages {
+        stage('WSClean') {
+            steps { 
+                step([$class:'WsCleanup'])
+            }
+        } 
+        stage('Checkout') {
+            steps { 
+                script {
+                    try {
+                        git branch: 'papu', credentialsId: '0957eb3e-b490-4d0a-b06e-c993ec94a732', url: 'https://bitbucket.org/synectiks/cloudautomationexamples.git'
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    }
+                }
+            }
+        }         
+        stage('DevDeploy') {
+            steps { 
+                echo "Deploying Service in Dev Bucket"                 
+                script {
+                    if(isDev == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-dev']]) {                                    
+                                    sh "sceptre --dir simpletwoservice/ launch-stack dev productservice"
+                                    sh "sceptre --dir simpletwoservice/ launch-stack dev mainservice"
+                                }
+                            }
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }
+            }
+        } 
+        stage('TestDeploy') {
+            steps { 
+                echo "Deploying Service in Test Bucket"                
+                script {
+                    if(isTest == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-test']]) {                                    
+                                    sh "sceptre --dir simpletwoservice/ launch-stack test productservice"
+                                    sh "sceptre --dir simpletwoservice/ launch-stack test mainservice"
+                                }
+                            }                           
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }               
+            }
+        }         
+        stage('ATP') {
+            steps { 
+                script {
+                    try {
+                        echo "Doing ATP" 
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    }
+                }
+            }
+        } 
+        stage('StageDeploy') {
+            steps {                 
+                script {
+                    echo "Deploying in Stage" 
+                    if(isStage == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-stage']]) {                                    
+                                    sh "sceptre --dir simpletwoservice/ launch-stack stage productservice"
+                                    sh "sceptre --dir simpletwoservice/ launch-stack stage mainservice"
+                                }
+                            }                           
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }
+            }
+        } 
+        stage('ApproveForProd') {
+            steps { 
+                script {
+                    try {
+                        echo "Prod Approval" 
+                    } catch (Exception e) {
+                        currentBuild.result = "FAILURE"
+                        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                    }
+                }
+            }
+        } 
+        stage('ProdDeploy') {
+            steps { 
+                echo "Deploying Service in Prod Bucket" 
+                script {
+                    if(isProd == 'true') {
+                        try {
+                            dir('jenkin/servicedeploy') {
+                                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-prod']]) {                                    
+                                    sh "sceptre --dir simpletwoservice/ launch-stack prod productservice"
+                                    sh "sceptre --dir simpletwoservice/ launch-stack prod mainservice"
+                                }
+                            }                             
+                        } catch (Exception e) {
+                            currentBuild.result = "FAILURE"
+                            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                        }
+                    }
+                }                
+            }
+        }                    
+    } 
+    post
+    {
+        always
+        {
+            echo "Finished Stages"          
+        }
+    }
+}

@@ -1,0 +1,34 @@
+node {
+    def mvnHome
+    try {
+        stage('Checkout') { //(1)
+            step([$class:'WsCleanup'])
+            git branch: 'saha', credentialsId: '0957eb3e-b490-4d0a-b06e-c993ec94a732', url: 'https://bitbucket.org/synectiks/cloudautomationexamples.git'
+        }
+        stage('Tests') { //(3)
+            dir('jenkin/tests/servicetest') {
+                mvnHome = tool 'maven3'
+                sh "'${mvnHome}/bin/mvn' clean  verify  serenity:aggregate"
+            }          
+        }
+        stage('Report Gathering') {
+            dir('jenkin/tests/servicetest') {
+                publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'target/site/serenity', reportFiles: 'index.html', reportName: 'Serenity Reports'])
+            }
+        }
+        stage('Report') { //(4)
+            if (currentBuild.currentResult == 'UNSTABLE') {
+                currentBuild.result = "UNSTABLE"
+            } else {
+                currentBuild.result = "SUCCESS"
+            }
+            step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+        }
+    } catch (Exception e) {
+        dir('jenkin/tests/servicetest') {
+                publishHTML([allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'target/site/serenity', reportFiles: 'index.html', reportName: 'Serenity Reports'])
+        }
+        currentBuild.result = "FAILURE"
+        step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+    }
+}

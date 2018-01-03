@@ -1,0 +1,10 @@
+template_path: templates/rds.json
+parameters:
+  ProductName: !stack_output backbone::ProductName
+  EnvironmentName: !stack_output backbone::EnvironmentName
+  VPC:  !stack_output backbone::VPC
+  PrivateSubnets: !stack_output backbone::PrivateSubnets
+  JumpboxSecurityGroup: !stack_output security-groups::JumpboxSecurityGroup
+  DBName: "product"
+  DBUser: "root"
+  DBPassword: "password"
