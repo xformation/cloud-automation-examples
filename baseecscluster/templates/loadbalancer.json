@@ -1,0 +1,139 @@
+{
+    "Description": "This template deploys an Application Load Balancer that exposes our various ECS services. We create them it a seperate nested template, so it can be referenced by all of the other nested templates.\n", 
+    "Parameters": {
+        "ProductName": {
+            "Description": "The Product Name, that we tag with every resource , so that we can track resources for products", 
+            "Type": "String"
+        }, 
+        "EnvironmentName": {
+            "Description": "An environment name that will be prefixed to resource names", 
+            "Type": "String"
+        }, 
+        "VPC": {
+            "Type": "AWS::EC2::VPC::Id", 
+            "Description": "Choose which VPC the Applicaion Load Balancer should be deployed to"
+        }, 
+        "Subnets": {
+            "Description": "Choose which subnets the Applicaion Load Balancer should be deployed to", 
+            "Type": "List<AWS::EC2::Subnet::Id>"
+        }, 
+        "SecurityGroup": {
+            "Description": "Select the Security Group to apply to the Applicaion Load Balancer", 
+            "Type": "AWS::EC2::SecurityGroup::Id"
+        }
+    },
+    "Mappings": {
+        "CertificateARNForEnv": {
+            "dev": {
+                "ARN": "arn:aws:acm:us-east-1:657907747545:certificate/fba715c5-59a1-47b4-8b05-e9ce3738d74e"               
+            },
+            "test": {
+                "ARN": "arn:aws:acm:us-east-1:911149003259:certificate/886e88a0-afeb-45f8-9081-af52a07e9013"
+            },
+            "stage": {
+                "ARN": "arn:aws:acm:eu-central-1:629439110791:certificate/fe3bd25a-54c7-47e9-a974-d01c5c9fa2c2"
+            },
+            "prod": {
+                "ARN": "arn:aws:acm:eu-central-1:341972431157:certificate/63b2d8fa-88e0-4c65-8f3f-27344b65e83b"
+            }
+        }
+    },
+    "Resources": {
+        "LoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer", 
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProductName}-${EnvironmentName}-alb"
+                },
+                "Subnets": {
+                    "Ref": "Subnets"
+                }, 
+                "SecurityGroups": [
+                    {
+                        "Ref": "SecurityGroup"
+                    }
+                ], 
+                "Tags": [
+                    {
+                        "Key": "Name", 
+                        "Value": {
+                            "Fn::Sub": "${ProductName}-${EnvironmentName}-alb"
+                        }
+                    }
+                ]
+            }
+        }, 
+        "LoadBalancerListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener", 
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "LoadBalancer"
+                },
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Fn::FindInMap": [
+                                "CertificateARNForEnv",
+                                {
+                                    "Ref": "EnvironmentName"
+                                },
+                                "ARN"
+                            ]
+                        }
+                    }
+                ],
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "DefaultActions": [
+                    {
+                        "Type": "forward", 
+                        "TargetGroupArn": {
+                            "Ref": "DefaultTargetGroup"
+                        }
+                    }
+                ]
+            }
+        }, 
+        "DefaultTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup", 
+            "Properties": {
+                "Name": {
+                    "Fn::Join": [
+                        "", 
+                        [
+                            "TG-", 
+                            {
+                                "Ref": "VPC"
+                            }
+                        ]
+                    ]
+                }, 
+                "VpcId": {
+                    "Ref": "VPC"
+                }, 
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        }
+    }, 
+    "Outputs": {
+        "LoadBalancer": {
+            "Description": "A reference to the Application Load Balancer", 
+            "Value": {
+                "Ref": "LoadBalancer"
+            }
+        }, 
+        "LoadBalancerUrl": {
+            "Description": "The URL of the ALB", 
+            "Value": {
+                "Fn::GetAtt": "LoadBalancer.DNSName"
+            }
+        }, 
+        "Listener": {
+            "Description": "A reference to a port 443 listener", 
+            "Value": {
+                "Ref": "LoadBalancerListener"
+            }
+        }
+    }
+}
