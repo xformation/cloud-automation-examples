@@ -1,7 +1,0 @@
-template_path: templates/jumpbox.json
-
-parameters:
-  EnvironmentName: !stack_output backbone::EnvironmentName
-  SubnetId: !stack_output backbone::PublicSubnet1
-  WhitelistIP: 0.0.0.0/0
-  JumpboxSecurityGroup: !stack_output security-groups::JumpboxSecurityGroup

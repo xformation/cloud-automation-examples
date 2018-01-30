@@ -1,8 +1,0 @@
-template_path: templates/load-balancer.json
-parameters:
-  ProductName: !stack_output backbone::ProductName
-  EnvironmentName: !stack_output backbone::EnvironmentName
-  VPC:  !stack_output backbone::VPC
-  Subnets: !stack_output backbone::PublicSubnets
-  SecurityGroup: !stack_output security-groups::LoadBalancerSecurityGroup
-  
