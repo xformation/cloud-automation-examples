@@ -33,12 +33,12 @@ pipeline {
                             try {
                                 if(isDev == 'true') {
                                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-dev']]) {                                    
-                                        sh "sceptre --dir basecluster launch-env dev"
+                                        sh "sceptre --dir baseecscluster launch-env dev"
                                     }
                                 }
                             } catch (Exception e) {
                                 currentBuild.result = "FAILURE"
-                                // step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
+                                step([$class: 'InfluxDbPublisher', customData: null, customDataMap: null, customPrefix: null, target: 'grafana'])
                                 throw e
                             }
                         }
@@ -50,7 +50,7 @@ pipeline {
                             try {
                                 if (isTest == 'true') {
                                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-test']]) {                                   
-                                        sh "sceptre --dir basecluster launch-env test"
+                                        sh "sceptre --dir baseecscluster launch-env test"
                                     }                                   
                                 }
                             } catch (Exception e) {
@@ -67,7 +67,7 @@ pipeline {
                             try {
                                 if (isStage == 'true') {
                                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-stage']]) {                                    
-                                        sh "sceptre --dir basecluster launch-env stage"
+                                        sh "sceptre --dir baseecscluster launch-env stage"
                                     }
                                 }
                             } catch (Exception e) {
@@ -84,7 +84,7 @@ pipeline {
                             try {
                                 if(isProd == 'true') {
                                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'synectiks-prod']]) {
-                                        sh "sceptre --dir basecluster launch-env prod"
+                                        sh "sceptre --dir baseecscluster launch-env prod"
                                     }
                                 }
                             } catch (Exception e) {
