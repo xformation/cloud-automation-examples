@@ -94,10 +94,10 @@ pipeline {
                         script {
                             try {
                                 dir('jenkin/services/crossover') {
-                                    withSonarQubeEnv('mysonar') {
-                                        // requires SonarQube Scanner for Maven 3.2+
-                                        sh "'${mvnHome}/bin/mvn' org.sonarsource.scanner.maven:sonar-maven-plugin:3.2:sonar"
-                                    }
+                                    // withSonarQubeEnv('mysonar') {
+                                    //     // requires SonarQube Scanner for Maven 3.2+
+                                    //     sh "'${mvnHome}/bin/mvn' org.sonarsource.scanner.maven:sonar-maven-plugin:3.2:sonar"
+                                    // }
                                 }
                             } catch (Exception e) {
                                 currentBuild.result = "FAILURE"
