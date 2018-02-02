@@ -1,0 +1,12 @@
+node {
+    try {
+        stage('stage1') { //(1)
+            echo "stage1"
+        }
+        stage('stage2') { //(3)
+            echo "stage2"
+        }
+    } catch (Exception e) {
+        
+    }
+}
