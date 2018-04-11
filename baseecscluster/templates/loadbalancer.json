@@ -25,7 +25,7 @@
     "Mappings": {
         "CertificateARNForEnv": {
             "dev": {
-                "ARN": "arn:aws:acm:us-east-1:657907747545:certificate/fba715c5-59a1-47b4-8b05-e9ce3738d74e"               
+                "ARN": "arn:aws:acm:us-east-1:657907747545:certificate/76538b3a-7229-4ea7-b146-2f11eb7f54f1"               
             },
             "test": {
                 "ARN": "arn:aws:acm:us-east-1:911149003259:certificate/886e88a0-afeb-45f8-9081-af52a07e9013"

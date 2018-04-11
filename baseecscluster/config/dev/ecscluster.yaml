@@ -10,4 +10,4 @@ parameters:
   EfsSecurityGroup:  !stack_output efs::EfsAccessSecurityGroup
   AddEfs: "true"
   DesiredClusterSize: '1'
-  InstanceType: "t2.medium"
+  InstanceType: "r4.large"
